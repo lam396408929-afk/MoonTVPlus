@@ -188,7 +188,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       );
       window.removeEventListener('storage', handlePlayRecordsUpdated);
     };
-  }, [currentSource, currentId, episodeProgressContentKey, totalEpisodes, value]);
+  }, [currentSource, currentId, episodeProgressContentKey, totalEpisodes]);
 
   // 主要的 tab 状态：'danmaku' | 'episodes' | 'sources'
   // 默认显示选集选项卡，但如果是房员则显示弹幕
@@ -576,9 +576,13 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   const handleEpisodeClick = useCallback(
     (episodeNumber: number) => {
+      if (episodeNumber + 1 === value) {
+        return;
+      }
+
       onChange?.(episodeNumber);
     },
-    [onChange]
+    [onChange, value]
   );
 
   const handleSourceClick = useCallback(
@@ -794,6 +798,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                   return (
                     <button
                       key={episodeNumber}
+                      disabled={isActive}
                       onClick={() => handleEpisodeClick(episodeNumber - 1)}
                       className={`relative h-10 min-w-10 px-3 py-2 flex items-center justify-center text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap font-mono border
                         ${isActive
@@ -801,8 +806,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                           : isWatched
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:scale-105 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700/60 dark:hover:bg-emerald-900/30'
                             : 'bg-gray-200 text-gray-700 border-transparent hover:bg-gray-300 hover:scale-105 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`.trim()}
+                        } ${isActive ? 'cursor-default' : ''}`.trim()}
                       title={isWatched && !isActive ? '已观看过' : undefined}
+                      aria-current={isActive ? 'true' : undefined}
                     >
                       {isWatched && !isActive && (
                         <span className='absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400' />

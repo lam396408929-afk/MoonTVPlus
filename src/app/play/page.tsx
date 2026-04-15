@@ -4421,11 +4421,17 @@ function PlayPageClient() {
 
   // 处理集数切换
   const handleEpisodeChange = async (episodeNumber: number) => {
-    if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
-      await prepareEpisodeSwitch();
-      await primeEpisodeResumeState(episodeNumber);
-      setCurrentEpisodeIndex(episodeNumber);
+    if (episodeNumber < 0 || episodeNumber >= totalEpisodes) {
+      return;
     }
+
+    if (episodeNumber === currentEpisodeIndexRef.current) {
+      return;
+    }
+
+    await prepareEpisodeSwitch();
+    await primeEpisodeResumeState(episodeNumber);
+    setCurrentEpisodeIndex(episodeNumber);
   };
 
   const handlePreviousEpisode = async () => {
@@ -6052,27 +6058,6 @@ function PlayPageClient() {
 
               hls.on(Hls.Events.MEDIA_ATTACHED, () => {
                 kickStartHlsPlayback();
-
-                if (!isWebkit) {
-                  return;
-                }
-
-                // Safari 偶发出现 media 已 attach 但 video.src 仍为空的状态。
-                // 这里延迟自检一次，必要时重新 attach，强制回到 blob: MSE 路径。
-                schedulePlayerTimeout(() => {
-                  if (!shouldRescueWebkitHls(video)) {
-                    return;
-                  }
-
-                  console.warn('[HLS] Safari attach watchdog triggered, reattaching media');
-                  try {
-                    hls.detachMedia();
-                    hls.attachMedia(video);
-                    kickStartHlsPlayback();
-                  } catch (error) {
-                    console.warn('[HLS] Safari reattach failed:', error);
-                  }
-                }, 1200);
               });
 
               hls.loadSource(url);
@@ -6085,15 +6070,15 @@ function PlayPageClient() {
                     return;
                   }
 
-                  console.warn('[HLS] Safari post-attach watchdog triggered, forcing reattach');
+                  console.warn('[HLS] Safari attach watchdog triggered, forcing reattach');
                   try {
                     hls.detachMedia();
                     hls.attachMedia(video);
                     kickStartHlsPlayback();
                   } catch (error) {
-                    console.warn('[HLS] Safari post-attach reattach failed:', error);
+                    console.warn('[HLS] Safari attach reattach failed:', error);
                   }
-                }, 1200);
+                }, 3000);
               }
 
               ensureVideoSource(video, url);
@@ -6108,10 +6093,15 @@ function PlayPageClient() {
               hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 console.log('[HLS] Manifest解析完成');
 
-                if (video.paused && (artPlayerRef.current?.option.autoplay || artPlayerRef.current?.loading)) {
-                  video.play().catch((error) => {
+                const player = artPlayerRef.current;
+                if (video.paused && (player?.option.autoplay || player?.loading)) {
+                  try {
+                    Promise.resolve(player?.play?.()).catch((error) => {
+                      console.warn('[HLS] play after manifest parsed failed:', error);
+                    });
+                  } catch (error) {
                     console.warn('[HLS] play after manifest parsed failed:', error);
-                  });
+                  }
                 }
 
                 // 只在首次加载时启动定时器（后续刷新会在refreshXiaoyaUrl中启动）
@@ -7303,7 +7293,7 @@ function PlayPageClient() {
 
           if (shouldIgnoreSafariReset) {
             // Safari 切集后可能偷偷回到 1x，这不是用户真实选择，不要覆盖记忆值。
-            setTimeout(() => {
+            schedulePlayerTimeout(() => {
               if (
                 artPlayerRef.current &&
                 Math.abs(
